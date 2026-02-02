@@ -18,17 +18,27 @@ pip install -r requirements.txt
 
 ## Usage
 ```bash
-# Basic usage
-python roboxtract.py -l domains.txt
-
-# With output to file
+# Basic scan
 python roboxtract.py -l domains.txt -o endpoints.txt
 
-# With threading
-python roboxtract.py -l domains.txt --threads 10
+# Fast scan (20 threads)
+python roboxtract.py -l domains.txt -o endpoints.txt -t 20
 
 # Verbose mode
 python roboxtract.py -l domains.txt -v
+
+# Custom headers
+python roboxtract.py -l domains.txt -H "User-Agent: Custom"
+```
+
+### Options
+```
+-l, --list      Input file with domains (required)
+-o, --output    Output file for endpoints
+-t, --threads   Number of threads (default: 10)
+-v, --verbose   Enable verbose output
+-H, --header    Custom HTTP header
+--no-color      Disable colored output
 ```
 
 ## Input Format
@@ -39,6 +49,12 @@ https://example.com
 https://api.example.com
 https://admin.example.com
 ```
+
+## Requirements
+
+- Python 3.7+
+- requests
+- urllib3
 
 ## License
 

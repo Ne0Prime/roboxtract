@@ -1,3 +1,6 @@
 # IDE
 .obsidian/
 .vscode/
+
+# Test files
+*test*
