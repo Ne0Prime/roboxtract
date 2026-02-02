@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Disable warnings
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# ANSI Color codes (optional, works on Linux/Mac)
+# ANSI Color codes
 class Colors:
     HEADER = '\033[95m'
     BLUE = '\033[94m'
@@ -117,22 +117,16 @@ def request(subdomain, args):
             headers=headers,
             timeout=20,
             verify=False,
-            allow_redirects=True
+            allow_redirects=False
         )
         
         return response
     
     except requests.exceptions.Timeout:
-        if args.verbose:
-            print(f"{Colors.YELLOW}[!]{Colors.ENDC} {url} - Timeout")
         return None
     except requests.exceptions.ConnectionError:
-        if args.verbose:
-            print(f"{Colors.YELLOW}[!]{Colors.ENDC} {url} - Connection error")
         return None
-    except Exception as e:
-        if args.verbose:
-            print(f"{Colors.RED}[!]{Colors.ENDC} {url} - {type(e).__name__}")
+    except Exception:
         return None
 
 def main():
@@ -220,37 +214,62 @@ def main():
     print(f"\n{Colors.BLUE}[*]{Colors.ENDC} Fetching robots.txt files...")
     print(f"{Colors.CYAN}{'─' * 60}{Colors.ENDC}")
     
-    with ThreadPoolExecutor(max_workers=args.threads) as executor:
-        future_to_domain = {
-            executor.submit(request, subdomain, args): subdomain
-            for subdomain in subdomains
-        }
-        
-        completed = 0
-        for future in as_completed(future_to_domain):
-            completed += 1
-            subdomain = future_to_domain[future]
+    try:
+        with ThreadPoolExecutor(max_workers=args.threads) as executor:
+            future_to_domain = {
+                executor.submit(request, subdomain, args): subdomain
+                for subdomain in subdomains
+            }
+            
+            completed = 0
+            total = len(future_to_domain)
+            found_count = 0
             
             try:
-                result = future.result()
-                
-                if result and result.status_code == 200:
-                    results.append(result)
-                    if args.verbose:
-                        print(f"{Colors.GREEN}[✓]{Colors.ENDC} {result.url}")
-                elif result and args.verbose and result.status_code != 404:
-                    print(f"{Colors.YELLOW}[{result.status_code}]{Colors.ENDC} {result.url}")
+                for future in as_completed(future_to_domain):
+                    completed += 1
+                    subdomain = future_to_domain[future]
                     
-            except Exception as e:
-                if args.verbose:
-                    print(f"{Colors.RED}[!]{Colors.ENDC} {subdomain} - Exception")
+                    try:
+                        result = future.result()
+                        
+                        if result and result.status_code == 200:
+                            results.append(result)
+                            found_count += 1
+                            
+                            if args.verbose:
+                                # Clear progress line, print message
+                                print(f"\r{' ' * 120}\r{Colors.GREEN}[✓]{Colors.ENDC} {result.url}")
+                    
+                    except Exception:
+                        pass
+                    
+                    # Progress bar (always shown)
+                    percentage = (completed / total) * 100
+                    bar_length = 50
+                    filled = int(bar_length * completed / total)
+                    bar = '█' * filled + '░' * (bar_length - filled)
+                    
+                    # Print progress
+                    print(f"\r{Colors.CYAN}[{bar}]{Colors.ENDC} {completed}/{total} ({percentage:.0f}%) | Found: {Colors.GREEN}{found_count}{Colors.ENDC}  ", end='', flush=True)
+                
+            except KeyboardInterrupt:
+                # Clear progress line
+                print(f"\r{' ' * 120}\r", end='')
+                print(f"\n{Colors.YELLOW}[!]{Colors.ENDC} Interrupted by user")
+                print(f"{Colors.BLUE}[*]{Colors.ENDC} Processed {completed}/{total} domains")
+                
+                # Cancel remaining futures
+                for f in future_to_domain.keys():
+                    f.cancel()
+                
+                # Force exit
+                os._exit(130)
             
-            # Progress indicator (non-verbose)
-            if not args.verbose and completed % 10 == 0:
-                print(f"{Colors.BLUE}[*]{Colors.ENDC} Progress: {completed}/{len(subdomains)}", end='\r')
+            print()  # New line after completion
     
-    if not args.verbose:
-        print(f"{Colors.BLUE}[*]{Colors.ENDC} Progress: {len(subdomains)}/{len(subdomains)}")
+    except KeyboardInterrupt:
+        os._exit(130)
     
     print(f"{Colors.CYAN}{'─' * 60}{Colors.ENDC}")
     print(f"{Colors.GREEN}[✓]{Colors.ENDC} Found {Colors.BOLD}{len(results)}{Colors.ENDC} accessible robots.txt files")
@@ -307,7 +326,6 @@ def main():
 
 if __name__ == "__main__":
     try:
-        exit(main())
+        sys.exit(main())
     except KeyboardInterrupt:
-        print(f"\n{Colors.YELLOW}[!]{Colors.ENDC} Interrupted by user")
-        sys.exit(1)
+        os._exit(130)
